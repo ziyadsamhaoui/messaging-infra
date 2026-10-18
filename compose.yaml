@@ -26,6 +26,15 @@ services:
     ports: ["5434:5432"]
     volumes: ["pg-notification:/var/lib/postgresql/data"]
 
+  postgres-attachment:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: attachment_db
+      POSTGRES_USER: attachment_service
+      POSTGRES_PASSWORD: ${POSTGRES_ATTACHMENT_PASSWORD}
+    ports: ["5436:5432"]
+    volumes: ["pg-attachment:/var/lib/postgresql/data"]
+
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
@@ -50,6 +59,44 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio-data:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ATTACHMENT_BUCKET: ${MINIO_ATTACHMENT_BUCKET:-badrlink-attachments}
+      MINIO_QUARANTINE_BUCKET: ${MINIO_QUARANTINE_BUCKET:-badrlink-quarantine}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        mc alias set badrlink http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "badrlink/$$MINIO_ATTACHMENT_BUCKET"
+        mc mb --ignore-existing "badrlink/$$MINIO_QUARANTINE_BUCKET"
+        mc anonymous set none "badrlink/$$MINIO_ATTACHMENT_BUCKET"
+        mc anonymous set none "badrlink/$$MINIO_QUARANTINE_BUCKET"
+        echo "Attachment buckets are ready and private."
 
   mongodb:
     image: mongo:8
@@ -124,5 +171,7 @@ volumes:
   pg-auth:
   pg-user:
   pg-notification:
+  pg-attachment:
   mongo-data:
   mongo-keyfile:
+  minio-data:
