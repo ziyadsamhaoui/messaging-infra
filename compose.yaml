@@ -1,15 +1,6 @@
-# BadrLink shared infrastructure (PostgreSQL, Redis, Kafka, MongoDB, MinIO).
-#
-# This project owns every stateful component and nothing else. The applications
-# live in ../compose.apps.yaml, which joins the `badrlink-net` network defined
-# here rather than redefining or duplicating any of this.
-#
-#   docker compose up -d --wait          # start infrastructure, wait for health
+#   docker compose up -d                 # start; `docker compose ps` for health
 #   docker compose down                  # stop; named volumes (the data) survive
 #   docker compose down -v               # stop and DELETE all data
-#
-# Values come from ./.env (copy .env.example). Host tooling (mvnw, npm) keeps
-# using the published host ports; containers use the service names.
 
 name: badrlink-infra
 
@@ -106,10 +97,6 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      # Two client listeners. An advertised listener is the address clients are
-      # told to reconnect to, so a single `localhost:9092` makes every container
-      # dial itself. Host tools keep localhost:9092; containers use
-      # kafka:29092, which is what compose.apps.yaml sets.
       KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
@@ -119,8 +106,6 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      # The stock image logs to /tmp/kraft-combined-logs; state it explicitly so
-      # the volume below is the single source of truth.
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
     volumes: ["kafka-data:/tmp/kraft-combined-logs"]
     healthcheck:
@@ -250,8 +235,8 @@ services:
     networks: [badrlink-net]
 
 networks:
-  # Fixed name: compose.apps.yaml declares this network as external, so both
-  # projects must agree on it exactly.
+  # fixed name, compose.apps.yaml declares this network as external
+  # so both projects must agree on it exactly.
   badrlink-net:
     name: badrlink-net
 
