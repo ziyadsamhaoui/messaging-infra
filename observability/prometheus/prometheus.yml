@@ -1,0 +1,49 @@
+# Prometheus scrapes every service on its management port (9090), over the
+# shared Docker network. Container ports are never host-published for the
+# backend services, so both the host mapping and the internal port below are
+# irrelevant to scrapes: only the service name and the container port matter.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: local
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: messaging-api-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["gateway:9090"]
+
+  - job_name: messaging-auth-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["auth:9090"]
+
+  - job_name: messaging-user-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["user:9090"]
+
+  - job_name: messaging-chat-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["chat:9090"]
+
+  - job_name: messaging-realtime-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["realtime:9090"]
+
+  - job_name: messaging-notification-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["notification:9090"]
+
+  - job_name: messaging-attachment-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["attachment:9090"]
