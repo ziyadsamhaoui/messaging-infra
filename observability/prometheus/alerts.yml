@@ -1,0 +1,96 @@
+# Minimal, actionable alert set. Every expression references a metric that this
+# sprint actually produces; the thresholds are derived from the local relay and
+# scrape intervals, not copied from a generic "production ready" list.
+#
+# Prometheus evaluates these rules; Grafana shows them through the Prometheus
+# data source (Grafana alerting is deliberately not duplicated).
+groups:
+  - name: badrlink-observability
+    rules:
+      # The outbox relay runs every 500 ms. An unpublished row that is older
+      # than a minute means the relay is stopped, blocked or failing, so the
+      # event stream is silently stalling.
+      - alert: OutboxBacklogNotDraining
+        expr: max by (job) (badrlink_outbox_oldest_age_seconds) > 60
+        for: 2m
+        labels:
+          severity: critical
+          subsystem: outbox
+        annotations:
+          summary: "Outbox backlog is not draining on {{ $labels.job }}"
+          description: >-
+            The oldest unpublished outbox row on {{ $labels.job }} is
+            {{ printf "%.0f" $value }}s old (threshold 60s). Check the relay
+            logs for publish failures and the outbox counters on the service
+            dashboard.
+
+      # An open circuit breaker means a downstream dependency is failing. The
+      # gateway opens it after repeated failures; three minutes of open state is
+      # longer than a single retry/backoff cycle.
+      - alert: GatewayCircuitBreakerOpen
+        expr: max by (job, name) (resilience4j_circuitbreaker_state{state="open"}) == 1
+        for: 3m
+        labels:
+          severity: warning
+          subsystem: gateway
+        annotations:
+          summary: "Circuit breaker {{ $labels.name }} is open"
+          description: >-
+            The {{ $labels.name }} circuit breaker in {{ $labels.job }} has been
+            open for more than 3 minutes. The failing upstream is returning
+            errors (or timing out); confirm with the gateway error-rate panel and
+            the upstream service dashboard.
+
+      # 5% 5xx over five minutes with a minimum of one request per second, so a
+      # single failed request on an idle service cannot page anyone.
+      - alert: HttpServerErrorRateHigh
+        expr: >-
+          sum by (job) (rate(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m]))
+          /
+          sum by (job) (rate(http_server_requests_seconds_count[5m])) > 0.05
+          and
+          sum by (job) (rate(http_server_requests_seconds_count[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          subsystem: http
+        annotations:
+          summary: "Server error rate is above 5% on {{ $labels.job }}"
+          description: >-
+            More than 5% of requests handled by {{ $labels.job }} returned 5xx
+            over the last five minutes. Open the service dashboard to find the
+            failing route, then follow its trace in Jaeger.
+
+      # Lag that keeps growing will never drain on its own: either the consumer
+      # is failing or the producer outpaces it. The derivative makes "growing"
+      # explicit, and the 100-message floor avoids noise on tiny topics.
+      - alert: KafkaConsumerLagGrowing
+        expr: >-
+          max by (job, group, topic) (badrlink_kafka_consumer_lag) > 100
+          and
+          deriv(max by (job, group, topic) (badrlink_kafka_consumer_lag)[10m:1m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          subsystem: kafka
+        annotations:
+          summary: "Kafka lag is growing on {{ $labels.topic }} ({{ $labels.group }})"
+          description: >-
+            Consumer group {{ $labels.group }} in {{ $labels.job }} is more than
+            100 messages behind on {{ $labels.topic }} and the gap has grown for
+            10 minutes. Check consumer errors and processing time before scaling.
+
+      # Basic availability: a service whose metrics stopped being scraped is
+      # invisible to every other alert, so this one must stand alone.
+      - alert: ServiceMetricsTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          subsystem: availability
+        annotations:
+          summary: "{{ $labels.job }} is not exposing metrics"
+          description: >-
+            Prometheus has failed to scrape {{ $labels.job }} for more than two
+            minutes. The container may be down, or the actuator port no longer
+            reachable; check `docker compose ps` and the service logs.
