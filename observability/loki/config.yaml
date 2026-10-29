@@ -1,8 +1,3 @@
-# Single-binary Loki for local log aggregation. Filesystem storage, one
-# replica, no auth: the endpoint is only published on the developer host.
-#
-# Schema v13 is required for structured metadata, which is how trace_id and
-# span_id are stored without turning them into high-cardinality stream labels.
 
 auth_enabled: false
 

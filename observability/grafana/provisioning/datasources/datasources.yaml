@@ -1,6 +1,3 @@
-# Provisioned data sources. Fixed UIDs are referenced by the dashboards and by
-# the Loki derived field that links a log line to its Jaeger trace, so they must
-# not be changed without updating both.
 apiVersion: 1
 
 datasources:
@@ -13,10 +10,6 @@ datasources:
     jsonData:
       timeInterval: 15s
       httpMethod: POST
-      # No exemplarTraceIdDestinations: the OpenTelemetry Java agent does not attach trace
-      # ids to Micrometer samples (that needs the Micrometer tracing bridge), so there are no
-      # exemplars to link. Trace discovery goes through the log lines below, which do carry
-      # the id.
 
   - name: Loki
     uid: badrlink-loki
@@ -25,8 +18,6 @@ datasources:
     url: http://loki:3100
     jsonData:
       maxLines: 2000
-      # trace_id is structured metadata, not a stream label, so the field is extracted from
-      # the JSON log line itself. The link resolves to the trace of that exact request.
       derivedFields:
         - name: TraceID
           matcherType: regex

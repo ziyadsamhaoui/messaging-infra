@@ -1,7 +1,3 @@
-# Prometheus scrapes every service on its management port (9090), over the
-# shared Docker network. Container ports are never host-published for the
-# backend services, so both the host mapping and the internal port below are
-# irrelevant to scrapes: only the service name and the container port matter.
 
 global:
   scrape_interval: 15s

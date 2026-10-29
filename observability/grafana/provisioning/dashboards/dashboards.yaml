@@ -1,5 +1,3 @@
-# Dashboard provider. Re-provisioning is enabled so a dashboard edited in the
-# UI is overwritten on restart by the version-controlled JSON next to it.
 apiVersion: 1
 
 providers:
